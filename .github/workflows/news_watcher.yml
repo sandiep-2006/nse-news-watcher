@@ -1,0 +1,61 @@
+name: NSE News Watcher
+
+on:
+  schedule:
+    # Every 5 minutes, 3:00-10:59 UTC = roughly 8:30am-4:30pm IST, Mon-Fri -
+    # comfortably wraps the 09:00-15:35 IST market session with padding on
+    # both sides. GitHub may delay a scheduled run by a few minutes when
+    # its runners are busy - not instant, but close.
+    - cron: "*/5 3-10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log alerts instead of sending them to Telegram (safe test)"
+        type: boolean
+        default: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      # Dedup state (which articles already got alerted on) needs to
+      # survive between runs even though each run starts on a fresh
+      # machine. restore-keys does a prefix match, so this picks up the
+      # most recently saved cache regardless of which exact run made it.
+      - name: Restore dedup state
+        uses: actions/cache/restore@v4
+        with:
+          path: data/news_watcher_seen.json
+          key: news-seen-${{ github.run_id }}
+          restore-keys: |
+            news-seen-
+
+      - name: Run one poll pass
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/run_news_watcher.py --once --dry-run
+          else
+            python scripts/run_news_watcher.py --once
+          fi
+
+      # Always save, even if the poll step above failed partway through -
+      # whatever got marked "seen" before a failure shouldn't be re-alerted
+      # next run.
+      - name: Save dedup state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/news_watcher_seen.json
+          key: news-seen-${{ github.run_id }}

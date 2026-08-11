@@ -1,0 +1,9 @@
+# News watcher configuration (non-secret). Telegram bot token/chat id live
+# separately in config/telegram_credentials.json (gitignored) - see
+# config/telegram_credentials.example.json.
+
+poll_seconds: 150 # how often to re-poll all sources, in seconds
+
+market_hours_only: true
+market_start: "09:00" # IST - slightly before the 09:15 open, catches pre-open news
+market_end: "15:35" # IST - slightly after the 15:30 close

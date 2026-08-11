@@ -1,0 +1,19 @@
+# Secrets - never commit these. Locally, fill these in from the .example
+# files. In GitHub Actions, the same values come from repo secrets
+# (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GEMINI_API_KEY) instead - see
+# .github/workflows/news_watcher.yml.
+config/telegram_credentials.json
+config/gemini_credentials.json
+
+# Dedup state (which articles have already been alerted on) - regenerated
+# automatically, restored/saved by the GitHub Actions cache step locally.
+data/news_watcher_seen.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
+logs/
