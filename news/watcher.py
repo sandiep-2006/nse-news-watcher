@@ -8,6 +8,7 @@ rest of the project.
 """
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import time
@@ -23,9 +24,60 @@ logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 SEEN_STATE_FILE = ROOT / "data" / "news_watcher_seen.json"
+ALERTS_LOG_FILE = ROOT / "data" / "alerts_log.csv"
 IST = ZoneInfo("Asia/Kolkata")
 MAX_SEEN_KEEP = 5000
 LLM_CALL_DELAY_SEC = 0.5  # spacing between Gemini calls within one poll, safety margin under the free tier's per-minute rate limit
+
+_LOG_FIELDS = [
+    "date_ist",
+    "time_ist",
+    "symbol",
+    "company",
+    "direction",
+    "confidence",
+    "engine",
+    "reason",
+    "headline",
+    "source",
+    "link",
+]
+
+
+def log_alert(
+    symbol: str,
+    company: str,
+    result: dict,
+    item: sources.NewsItem,
+    path: Path = ALERTS_LOG_FILE,
+) -> None:
+    """Appends one row per alert to a CSV, kept under version control (see
+    .github/workflows/news_watcher.yml's commit step) so the history of
+    every call made survives past any single GitHub Actions run - lets
+    accuracy be checked later by reading this file instead of screenshotting
+    Telegram."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not path.exists()
+    now = datetime.now(IST)
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=_LOG_FIELDS)
+        if is_new:
+            writer.writeheader()
+        writer.writerow(
+            {
+                "date_ist": now.strftime("%Y-%m-%d"),
+                "time_ist": now.strftime("%H:%M:%S"),
+                "symbol": symbol,
+                "company": company,
+                "direction": result["direction"],
+                "confidence": result["confidence"],
+                "engine": result.get("engine", ""),
+                "reason": result.get("reason", ""),
+                "headline": item.title,
+                "source": item.source,
+                "link": item.link,
+            }
+        )
 
 
 def load_seen(path: Path = SEEN_STATE_FILE) -> set[str]:
@@ -115,6 +167,7 @@ def run_once(matcher: SymbolMatcher, seen: set[str], use_llm: bool | None = None
                 item.title,
             )
             telegram_bot.send_message(text)
+            log_alert(symbol, company, result, item)
             n_alerts += 1
 
     return new_seen, n_alerts

@@ -17,6 +17,8 @@ on:
 jobs:
   poll:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed so the "Commit alert log" step below can push back to this repo
     steps:
       - uses: actions/checkout@v4
 
@@ -59,3 +61,22 @@ jobs:
         with:
           path: data/news_watcher_seen.json
           key: news-seen-${{ github.run_id }}
+
+      # Every alert (symbol, direction, confidence, headline) that this run
+      # sent gets appended to data/alerts_log.csv by news/watcher.py. Commit
+      # it back to the repo so the full history survives past this one
+      # ephemeral run - lets accuracy be checked later by reading this file
+      # directly instead of screenshotting Telegram.
+      - name: Commit alert log
+        if: always()
+        run: |
+          git config user.name "nse-news-watcher-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/alerts_log.csv
+          if ! git diff --cached --quiet; then
+            git commit -m "Log alerts - $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase origin main
+            git push
+          else
+            echo "No new alerts this run - nothing to commit."
+          fi
