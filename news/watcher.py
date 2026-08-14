@@ -148,7 +148,7 @@ def run_once(matcher: SymbolMatcher, seen: set[str], use_llm: bool | None = None
             continue
         new_seen.add(item.uid)
 
-        matches = matcher.match(f"{item.title} {item.summary}")
+        matches = matcher.match(item.title, item.summary)
         if not matches:
             continue
 
